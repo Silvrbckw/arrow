@@ -85,11 +85,8 @@ def _stringify_path(path):
         return os.path.expanduser(path)
 
     # checking whether path implements the filesystem protocol
-    try:
+    with contextlib.suppress(AttributeError):
         return os.path.expanduser(path.__fspath__())
-    except AttributeError:
-        pass
-
     raise TypeError("not a path-like object")
 
 
@@ -116,11 +113,10 @@ def get_contiguous_span(shape, strides, itemsize):
     start, end : int
       The span end points.
     """
+    start = 0
     if not strides:
-        start = 0
         end = itemsize * product(shape)
     else:
-        start = 0
         end = itemsize
         for i, dim in enumerate(shape):
             if dim == 0:
@@ -153,8 +149,7 @@ def _break_traceback_cycle_from_frame(frame):
     # Clear local variables in all inner frames, so as to break the
     # reference cycle.
     this_frame = sys._getframe(0)
-    refs = gc.get_referrers(frame)
-    while refs:
+    while refs := gc.get_referrers(frame):
         for frame in refs:
             if frame is not this_frame and isinstance(frame, types.FrameType):
                 break
@@ -165,8 +160,4 @@ def _break_traceback_cycle_from_frame(frame):
         # Clear the frame locals, to try and break the cycle (it is
         # somewhere along the chain of execution frames).
         frame.clear()
-        # To visit the inner frame, we need to find it among the
-        # referrers of this frame (while `frame.f_back` would let
-        # us visit the outer frame).
-        refs = gc.get_referrers(frame)
     refs = frame = this_frame = None
