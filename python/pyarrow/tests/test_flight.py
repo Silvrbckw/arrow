@@ -79,9 +79,8 @@ def read_flight_resource(path):
             return f.read()
     except FileNotFoundError:
         raise RuntimeError(
-            "Test resource {} not found; did you initialize the "
-            "test resource submodule?\n{}".format(root / path,
-                                                  traceback.format_exc()))
+            f"Test resource {root / path} not found; did you initialize the test resource submodule?\n{traceback.format_exc()}"
+        )
 
 
 def example_tls_certs():
@@ -219,8 +218,7 @@ class EchoFlightServer(FlightServerBase):
         self.last_message = reader.read_all()
 
     def do_exchange(self, context, descriptor, reader, writer):
-        for chunk in reader:
-            pass
+        pass
 
 
 class EchoStreamFlightServer(EchoFlightServer):
@@ -428,14 +426,11 @@ class ExchangeFlightServer(FlightServerBase):
         elif descriptor.command == b"transform":
             return self.exchange_transform(context, reader, writer)
         else:
-            raise pa.ArrowInvalid(
-                "Unknown command: {}".format(descriptor.command))
+            raise pa.ArrowInvalid(f"Unknown command: {descriptor.command}")
 
     def exchange_do_get(self, context, reader, writer):
         """Emulate DoGet with DoExchange."""
-        data = pa.Table.from_arrays([
-            pa.array(range(0, 10 * 1024))
-        ], names=["a"])
+        data = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=["a"])
         writer.begin(data.schema)
         writer.write_table(data)
 
@@ -468,7 +463,7 @@ class ExchangeFlightServer(FlightServerBase):
         """Sum rows in an uploaded table."""
         for field in reader.schema:
             if not pa.types.is_integer(field.type):
-                raise pa.ArrowInvalid("Invalid field: " + repr(field))
+                raise pa.ArrowInvalid(f"Invalid field: {repr(field)}")
         table = reader.read_all()
         sums = [0] * table.num_rows
         for column in table:
@@ -638,12 +633,12 @@ class HeaderAuthServerMiddlewareFactory(ServerMiddlewareFactory):
         if values[0] == 'Basic':
             decoded = base64.b64decode(values[1])
             pair = decoded.decode("utf-8").split(':')
-            if not (pair[0] == 'test' and pair[1] == 'password'):
+            if pair[0] != 'test' or pair[1] != 'password':
                 raise flight.FlightUnauthenticatedError(error_message)
             token = 'token1234'
         elif values[0] == 'Bearer':
             token = values[1]
-            if not token == 'token1234':
+            if token != 'token1234':
                 raise flight.FlightUnauthenticatedError(error_message)
         else:
             raise flight.FlightUnauthenticatedError(error_message)
@@ -658,15 +653,14 @@ class HeaderAuthServerMiddleware(ServerMiddleware):
         self.token = token
 
     def sending_headers(self):
-        return {'authorization': 'Bearer ' + self.token}
+        return {'authorization': f'Bearer {self.token}'}
 
 
 class HeaderAuthFlightServer(FlightServerBase):
     """A Flight server that tests with basic token authentication. """
 
     def do_action(self, context, action):
-        middleware = context.get_middleware("auth")
-        if middleware:
+        if middleware := context.get_middleware("auth"):
             auth_header = case_insensitive_header_lookup(
                 middleware.sending_headers(), 'Authorization')
             values = auth_header.split(' ')
@@ -696,8 +690,7 @@ class ArbitraryHeadersFlightServer(FlightServerBase):
     """A Flight server that tests multiple arbitrary headers."""
 
     def do_action(self, context, action):
-        middleware = context.get_middleware("arbitrary-headers")
-        if middleware:
+        if middleware := context.get_middleware("arbitrary-headers"):
             headers = middleware.sending_headers()
             header_1 = case_insensitive_header_lookup(
                 headers,
@@ -731,8 +724,7 @@ class HeaderFlightServer(FlightServerBase):
     """Echo back the per-call hard-coded value."""
 
     def do_action(self, context, action):
-        middleware = context.get_middleware("test")
-        if middleware:
+        if middleware := context.get_middleware("test"):
             return [middleware.special_value.encode()]
         return [b""]
 
@@ -983,17 +975,15 @@ def test_client_wait_for_available():
 
 def test_flight_list_flights():
     """Try a simple list_flights call."""
-    with ConstantFlightServer() as server, \
-            flight.connect(('localhost', server.port)) as client:
-        assert list(client.list_flights()) == []
+    with (ConstantFlightServer() as server, flight.connect(('localhost', server.port)) as client):
+        assert not list(client.list_flights())
         flights = client.list_flights(ConstantFlightServer.CRITERIA)
         assert len(list(flights)) == 1
 
 
 def test_flight_client_close():
-    with ConstantFlightServer() as server, \
-            flight.connect(('localhost', server.port)) as client:
-        assert list(client.list_flights()) == []
+    with (ConstantFlightServer() as server, flight.connect(('localhost', server.port)) as client):
+        assert not list(client.list_flights())
         client.close()
         client.close()  # Idempotent
         with pytest.raises(pa.ArrowInvalid):
@@ -1191,9 +1181,7 @@ def test_flight_large_message():
     See ARROW-4421: by default, gRPC won't allow us to send messages >
     4MiB in size.
     """
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024 * 1024))
-    ], names=['a'])
+    data = pa.Table.from_arrays([pa.array(range(10 * 1024 * 1024))], names=['a'])
 
     with EchoFlightServer(expected_schema=data.schema) as server, \
             FlightClient(('localhost', server.port)) as client:
@@ -1208,9 +1196,7 @@ def test_flight_large_message():
 
 def test_flight_generator_stream():
     """Try downloading a flight of RecordBatches in a GeneratorStream."""
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024))
-    ], names=['a'])
+    data = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=['a'])
 
     with EchoStreamFlightServer() as server, \
             FlightClient(('localhost', server.port)) as client:
@@ -1452,8 +1438,7 @@ def test_tls_fails():
 
     # Ensure client doesn't connect when certificate verification
     # fails (this is a slow test since gRPC does retry a few times)
-    with ConstantFlightServer(tls_certificates=certs["certificates"]) as s, \
-            FlightClient("grpc+tls://localhost:" + str(s.port)) as client:
+    with (ConstantFlightServer(tls_certificates=certs["certificates"]) as s, FlightClient(f"grpc+tls://localhost:{str(s.port)}") as client):
         # gRPC error messages change based on version, so don't look
         # for a particular error
         with pytest.raises(flight.FlightUnavailableError):
@@ -1884,9 +1869,7 @@ def test_mtls():
 
 def test_doexchange_get():
     """Emulate DoGet with DoExchange."""
-    expected = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024))
-    ], names=["a"])
+    expected = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=["a"])
 
     with ExchangeFlightServer() as server, \
             FlightClient(("localhost", server.port)) as client:
@@ -1899,9 +1882,7 @@ def test_doexchange_get():
 
 def test_doexchange_put():
     """Emulate DoPut with DoExchange."""
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024))
-    ], names=["a"])
+    data = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=["a"])
     batches = data.to_batches(max_chunksize=512)
 
     with ExchangeFlightServer() as server, \
@@ -1921,9 +1902,7 @@ def test_doexchange_put():
 
 def test_doexchange_echo():
     """Try a DoExchange echo server."""
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024))
-    ], names=["a"])
+    data = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=["a"])
     batches = data.to_batches(max_chunksize=512)
 
     with ExchangeFlightServer() as server, \
@@ -1959,9 +1938,7 @@ def test_doexchange_echo():
 
 def test_doexchange_echo_v4():
     """Try a DoExchange echo server using the V4 metadata version."""
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 10 * 1024))
-    ], names=["a"])
+    data = pa.Table.from_arrays([pa.array(range(10 * 1024))], names=["a"])
     batches = data.to_batches(max_chunksize=512)
 
     options = pa.ipc.IpcWriteOptions(
@@ -1983,11 +1960,14 @@ def test_doexchange_echo_v4():
 
 def test_doexchange_transform():
     """Transform a table with a service."""
-    data = pa.Table.from_arrays([
-        pa.array(range(0, 1024)),
-        pa.array(range(1, 1025)),
-        pa.array(range(2, 1026)),
-    ], names=["a", "b", "c"])
+    data = pa.Table.from_arrays(
+        [
+            pa.array(range(1024)),
+            pa.array(range(1, 1025)),
+            pa.array(range(2, 1026)),
+        ],
+        names=["a", "b", "c"],
+    )
     expected = pa.Table.from_arrays([
         pa.array(range(3, 1024 * 3 + 3, 3)),
     ], names=["sum"])
@@ -2298,10 +2278,9 @@ class TracingFlightServer(FlightServerBase):
 
 
 def test_tracing():
-    with TracingFlightServer(middleware={
-            "tracing": flight.TracingServerMiddlewareFactory(),
-    }) as server, \
-            FlightClient(('localhost', server.port)) as client:
+    with (TracingFlightServer(middleware={
+                "tracing": flight.TracingServerMiddlewareFactory(),
+        }) as server, FlightClient(('localhost', server.port)) as client):
         # We can't tell if Arrow was built with OpenTelemetry support,
         # so we can't count on any particular values being there; we
         # can only ensure things don't blow up either way.
@@ -2311,7 +2290,7 @@ def test_tracing():
                              b"000f0000f0f00000-00"),
             (b"tracestate", b""),
         ])
-        for value in client.do_action((b"", b""), options=options):
+        for _ in client.do_action((b"", b""), options=options):
             pass
 
 

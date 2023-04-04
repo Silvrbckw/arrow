@@ -69,25 +69,21 @@ def assert_equal(obj1, obj2):
     module_numpy = (type(obj1).__module__ == np.__name__ or
                     type(obj2).__module__ == np.__name__)
     if module_numpy:
-        empty_shape = ((hasattr(obj1, "shape") and obj1.shape == ()) or
-                       (hasattr(obj2, "shape") and obj2.shape == ()))
-        if empty_shape:
+        if empty_shape := (
+            (hasattr(obj1, "shape") and obj1.shape == ())
+            or (hasattr(obj2, "shape") and obj2.shape == ())
+        ):
             # This is a special case because currently np.testing.assert_equal
             # fails because we do not properly handle different numerical
             # types.
-            assert obj1 == obj2, ("Objects {} and {} are "
-                                  "different.".format(obj1, obj2))
+            assert obj1 == obj2, f"Objects {obj1} and {obj2} are different."
         else:
             np.testing.assert_equal(obj1, obj2)
     elif hasattr(obj1, "__dict__") and hasattr(obj2, "__dict__"):
         special_keys = ["_pytype_"]
-        assert (set(list(obj1.__dict__.keys()) + special_keys) ==
-                set(list(obj2.__dict__.keys()) + special_keys)), ("Objects {} "
-                                                                  "and {} are "
-                                                                  "different."
-                                                                  .format(
-                                                                      obj1,
-                                                                      obj2))
+        assert set(list(obj1.__dict__.keys()) + special_keys) == set(
+            list(obj2.__dict__.keys()) + special_keys
+        ), f"Objects {obj1} and {obj2} are different."
         if obj1.__dict__ == {}:
             print("WARNING: Empty dict in ", obj1)
         for key in obj1.__dict__.keys():
@@ -98,27 +94,25 @@ def assert_equal(obj1, obj2):
         for key in obj1.keys():
             assert_equal(obj1[key], obj2[key])
     elif type(obj1) is list or type(obj2) is list:
-        assert len(obj1) == len(obj2), ("Objects {} and {} are lists with "
-                                        "different lengths."
-                                        .format(obj1, obj2))
+        assert len(obj1) == len(
+            obj2
+        ), f"Objects {obj1} and {obj2} are lists with different lengths."
         for i in range(len(obj1)):
             assert_equal(obj1[i], obj2[i])
     elif type(obj1) is tuple or type(obj2) is tuple:
-        assert len(obj1) == len(obj2), ("Objects {} and {} are tuples with "
-                                        "different lengths."
-                                        .format(obj1, obj2))
+        assert len(obj1) == len(
+            obj2
+        ), f"Objects {obj1} and {obj2} are tuples with different lengths."
         for i in range(len(obj1)):
             assert_equal(obj1[i], obj2[i])
     elif (pa.lib.is_named_tuple(type(obj1)) or
           pa.lib.is_named_tuple(type(obj2))):
-        assert len(obj1) == len(obj2), ("Objects {} and {} are named tuples "
-                                        "with different lengths."
-                                        .format(obj1, obj2))
+        assert len(obj1) == len(
+            obj2
+        ), f"Objects {obj1} and {obj2} are named tuples with different lengths."
         for i in range(len(obj1)):
             assert_equal(obj1[i], obj2[i])
     elif isinstance(obj1, pa.Array) and isinstance(obj2, pa.Array):
-        assert obj1.equals(obj2)
-    elif isinstance(obj1, pa.Tensor) and isinstance(obj2, pa.Tensor):
         assert obj1.equals(obj2)
     elif isinstance(obj1, pa.Tensor) and isinstance(obj2, pa.Tensor):
         assert obj1.equals(obj2)
@@ -139,8 +133,9 @@ def assert_equal(obj1, obj2):
     elif isinstance(obj1, pa.Table) and isinstance(obj2, pa.Table):
         assert obj1.equals(obj2)
     else:
-        assert type(obj1) == type(obj2) and obj1 == obj2, \
-            "Objects {} and {} are different.".format(obj1, obj2)
+        assert (
+            type(obj1) == type(obj2) and obj1 == obj2
+        ), f"Objects {obj1} and {obj2} are different."
 
 
 PRIMITIVE_OBJECTS = [
@@ -172,9 +167,7 @@ PRIMITIVE_OBJECTS += [0, np.array([["hi", "hi"], [1.3, 1]])]
 
 COMPLEX_OBJECTS = [
     [[[[[[[[[[[[]]]]]]]]]]]],
-    {"obj{}".format(i): np.random.normal(size=[4, 4]) for i in range(5)},
-    # {(): {(): {(): {(): {(): {(): {(): {(): {(): {(): {
-    #       (): {(): {}}}}}}}}}}}}},
+    {f"obj{i}": np.random.normal(size=[4, 4]) for i in range(5)},
     ((((((((((),),),),),),),),),),
     {"a": {"b": {"c": {"d": {}}}}},
 ]
@@ -194,7 +187,7 @@ class Foo:
 class Bar:
     def __init__(self):
         for i, val in enumerate(COMPLEX_OBJECTS):
-            setattr(self, "field{}".format(i), val)
+            setattr(self, f"field{i}", val)
 
 
 class Baz:
